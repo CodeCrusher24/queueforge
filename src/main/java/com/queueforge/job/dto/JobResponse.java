@@ -8,9 +8,10 @@ import java.util.UUID;
 
 public record JobResponse(
         UUID id,
-        JobType type,
+        JobType jobType,
         JobStatus status,
         int priority,
+        int attemptCount,
         Instant createdAt,
         Instant runAt,
         boolean existingJob

@@ -1,5 +1,6 @@
 package com.queueforge.job;
 
+import com.queueforge.job.dto.JobResponse;
 import com.queueforge.job.dto.JobSubmitRequest;
 import com.queueforge.outbox.OutboxEvent;
 import com.queueforge.outbox.OutboxEventRepository;
@@ -10,15 +11,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.queueforge.config.RabbitConfig;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.springframework.transaction.support.TransactionSynchronization; // <-- CORRECTED
+import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 
 @Service
 public class JobService {
@@ -119,5 +120,21 @@ public class JobService {
         } catch (Exception e) {
             throw new RuntimeException("Failed to hash request", e);
         }
+    }
+
+    public List<JobResponse> getAllJobs() {
+        return jobRepository.findAll(org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt"))
+                .stream()
+                .map(job -> new JobResponse(
+                        job.getId(),
+                        job.getJobType(),
+                        job.getStatus(),
+                        job.getPriority(),
+                        job.getAttemptCount(),
+                        job.getCreatedAt(),
+                        job.getRunAt(),
+                        false
+                ))
+                .collect(java.util.stream.Collectors.toList());
     }
 }
