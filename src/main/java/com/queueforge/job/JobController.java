@@ -8,22 +8,32 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import com.queueforge.config.RedisRateLimiter;
+import org.springframework.http.HttpStatus;
 
 @RestController
 @RequestMapping("/api/v1/jobs")
 public class JobController {
 
     private final JobService jobService;
+    private final RedisRateLimiter rateLimiter;
 
-    public JobController(JobService jobService) {
+    public JobController(JobService jobService, RedisRateLimiter rateLimiter) {
         this.jobService = jobService;
+        this.rateLimiter = rateLimiter;
     }
 
     @PostMapping
-    public ResponseEntity<JobResponse> submitJob(
+    public ResponseEntity<?> submitJob(
             @Valid @RequestBody JobSubmitRequest request,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @AuthenticationPrincipal UserPrincipal principal) {
+
+        // Check Redis Rate Limiter
+        if (!rateLimiter.isAllowed(principal.getId().toString())) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body("Rate limit exceeded. Please wait a minute.");
+        }
 
         Job job = jobService.submitJob(request, idempotencyKey, principal);
 
