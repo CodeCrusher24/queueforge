@@ -128,7 +128,9 @@ public class JobService {
             throw new RuntimeException("Failed to hash request", e);
         }
     }
-
+    public java.util.List<JobEvent> getJobEvents(java.util.UUID jobId) {
+        return jobEventRepository.findByJobIdOrderByCreatedAtAsc(jobId);
+    }
     public List<JobResponse> getAllJobs() {
         return jobRepository.findAll(org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt"))
                 .stream()

@@ -18,6 +18,23 @@ Submit jobs through an authenticated API. Execute them reliably, asynchronously,
 
 ---
 
+## 📸 Screenshots
+
+### 1. Mission Control Dashboard
+Real-time metrics, job statuses, Redis worker heartbeats, and the live Kafka/RabbitMQ log stream.
+![Dashboard](screenshots/dashboard.png)
+
+<div align="center">
+  <img src="screenshots/audit-trail.png" width="48%" />
+  <img src="screenshots/rate-limit.png" width="48%" />
+</div>
+<br/>
+<div align="center">
+  <img src="screenshots/logs.png" width="100%" />
+</div>
+
+---
+
 ## 📖 Overview
 
 QueueForge separates job **submission** from job **execution**. Applications submit jobs through an authenticated API, state is persisted in PostgreSQL, and a separate Worker runtime executes them asynchronously. It handles retries, failures, delayed execution, and real-time event streaming.

@@ -28,7 +28,10 @@ public class JobController {
     public ResponseEntity<List<JobResponse>> getJobs() {
         return ResponseEntity.ok(jobService.getAllJobs());
     }
-
+    @GetMapping("/{id}/events")
+    public ResponseEntity<java.util.List<com.queueforge.job.JobEvent>> getJobEvents(@PathVariable java.util.UUID id) {
+        return ResponseEntity.ok(jobService.getJobEvents(id));
+    }
     @PostMapping
     public ResponseEntity<?> submitJob(
             @Valid @RequestBody JobSubmitRequest request,

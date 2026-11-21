@@ -1,5 +1,6 @@
 package com.queueforge.worker;
 
+import com.queueforge.config.LogStreamService;
 import com.queueforge.config.RabbitConfig;
 import com.queueforge.handler.HandlerRegistry;
 import com.queueforge.handler.JobHandler;
@@ -18,42 +19,40 @@ public class JobWorker {
     private final JobRepository jobRepository;
     private final JobStateMachine stateMachine;
     private final HandlerRegistry registry;
+    private final LogStreamService logStreamService;
 
-    public JobWorker(JobRepository jobRepository, JobStateMachine stateMachine, HandlerRegistry registry) {
+    public JobWorker(JobRepository jobRepository, JobStateMachine stateMachine, HandlerRegistry registry, LogStreamService logStreamService) {
         this.jobRepository = jobRepository;
         this.stateMachine = stateMachine;
         this.registry = registry;
+        this.logStreamService = logStreamService;
     }
 
     @RabbitListener(queues = RabbitConfig.QUEUE_NAME)
     public void processJob(String jobIdString) {
         UUID jobId = UUID.fromString(jobIdString);
-        System.out.println("👷 WORKER picked up message for Job: " + jobId);
+        String shortId = jobId.toString().substring(0, 8);
+        logStreamService.addLog("👷 WORKER picked up message for Job: " + shortId);
 
         try {
-            // 1. Fetch job and check if it's still eligible
             Job job = jobRepository.findById(jobId).orElse(null);
             if (job == null || job.getStatus() != JobStatus.QUEUED) {
-                System.out.println("⚠️ Job is no longer QUEUED. Acknowledging and skipping.");
-                return; // Stale message
+                logStreamService.addLog("⚠️ Job " + shortId + " is no longer QUEUED. Skipping.");
+                return;
             }
 
-            // 2. Transition to RUNNING
             stateMachine.transition(jobId, JobStatus.RUNNING, "WORKER", "worker-1", null);
+            logStreamService.addLog("▶️ Job " + shortId + " is now RUNNING.");
 
-            // 3. Execute handler
             JobHandler handler = registry.getHandler(job.getJobType());
             handler.validate(job.getPayload());
             handler.execute(job.getPayload());
 
-            // 4. Transition to SUCCEEDED
             stateMachine.transition(jobId, JobStatus.SUCCEEDED, "WORKER", "worker-1", null);
-            System.out.println("✅ WORKER finished Job: " + jobId);
+            logStreamService.addLog("✅ WORKER finished Job: " + shortId);
 
         } catch (Exception e) {
-            System.err.println("❌ WORKER failed Job: " + jobId + " - " + e.getMessage());
-
-            // Re-fetch the job to get the latest state before handling failure
+            logStreamService.addLog("❌ WORKER failed Job: " + shortId + " - " + e.getMessage());
             Job failedJob = jobRepository.findById(jobId).orElseThrow();
             stateMachine.handleFailure(failedJob, e.getMessage());
         }

@@ -1,5 +1,6 @@
 package com.queueforge.worker;
 
+import com.queueforge.config.LogStreamService;
 import com.queueforge.config.RabbitConfig;
 import com.queueforge.job.Job;
 import com.queueforge.job.JobRepository;
@@ -21,26 +22,26 @@ public class RetryScheduler {
     private final JobRepository jobRepository;
     private final JobStateMachine stateMachine;
     private final RabbitTemplate rabbitTemplate;
+    private final LogStreamService logStreamService;
 
-    public RetryScheduler(JobRepository jobRepository, JobStateMachine stateMachine, RabbitTemplate rabbitTemplate) {
+    public RetryScheduler(JobRepository jobRepository, JobStateMachine stateMachine, RabbitTemplate rabbitTemplate, LogStreamService logStreamService) {
         this.jobRepository = jobRepository;
         this.stateMachine = stateMachine;
         this.rabbitTemplate = rabbitTemplate;
+        this.logStreamService = logStreamService;
     }
 
-    // Run every 5 seconds
     @Scheduled(fixedDelay = 5000)
     @Transactional
     public void processRetries() {
         List<Job> jobsToRetry = jobRepository.findByStatusAndNextAttemptAtBefore(JobStatus.RETRY_WAIT, Instant.now());
 
         for (Job job : jobsToRetry) {
-            System.out.println("🔄 Scheduler re-queueing Job: " + job.getId());
+            String shortId = job.getId().toString().substring(0, 8);
+            logStreamService.addLog("🔄 Scheduler re-queueing Job: " + shortId);
 
-            // 1. Transition back to QUEUED
             stateMachine.transition(job.getId(), JobStatus.QUEUED, "SYSTEM", "scheduler", null);
 
-            // 2. Send to RabbitMQ ONLY AFTER the database transaction commits
             TransactionSynchronizationManager.registerSynchronization(
                     new TransactionSynchronization() {
                         @Override
