@@ -17,3 +17,16 @@
 - **JJWT**: 0.12.6
 - **Node.js**: 22.x LTS
 - **Frontend**: React + TypeScript + Vite (latest compatible)
+
+## ADR-003: JWT & Stateless Authentication
+- **Date**: 2026-11-20
+- **Status**: Accepted
+- **Context**: We need secure, scalable authentication without server-side session storage.
+- **Decision**: Implemented stateless JWT authentication. Tokens contain minimal claims (email, role, uid) and are signed using HS256. Spring Security is configured with a custom `JwtAuthenticationFilter` to validate tokens on every request.
+- **Consequences**: The API is horizontally scalable (any server can validate the token). XSS protection becomes critical on the frontend since tokens are stored client-side.
+
+## ADR-004: Job Submission & Idempotency
+- **Date**: 2026-11-20
+- **Status**: Accepted
+- **Context**: Users might double-click "Submit" or retry requests due to network failures.
+- **Decision**: Used `Idempotency-Key` headers and SHA-256 request hashing. If a key is reused with the same payload, the existing job is returned (HTTP 200). If the payload differs, it is rejected (HTTP 409 Conflict). The database enforces this via a partial unique index.
