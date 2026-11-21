@@ -88,7 +88,14 @@ public class JobService {
         outbox.setAggregateType("JOB");
         outbox.setAggregateId(job.getId());
         outbox.setEventType("JobSubmitted");
-        outbox.setPayload(Map.of("jobId", job.getId(), "jobType", job.getJobType(), "status", job.getStatus()));
+
+        // ---> THE FIX IS HERE <---
+        outbox.setPayload(Map.of(
+                "jobId", job.getId(),
+                "jobType", job.getJobType(),
+                "fromStatus", "NONE",
+                "toStatus", job.getStatus()
+        ));
         outboxEventRepository.save(outbox);
 
         // Send to RabbitMQ ONLY AFTER the database transaction commits
