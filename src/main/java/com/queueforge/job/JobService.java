@@ -8,11 +8,14 @@ import com.queueforge.user.User;
 import com.queueforge.user.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.queueforge.config.RabbitConfig;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.transaction.support.TransactionSynchronization; // <-- CORRECTED
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -24,13 +27,16 @@ public class JobService {
     private final JobEventRepository jobEventRepository;
     private final OutboxEventRepository outboxEventRepository;
     private final UserRepository userRepository;
+    private final RabbitTemplate rabbitTemplate;
 
     public JobService(JobRepository jobRepository, JobEventRepository jobEventRepository,
-                      OutboxEventRepository outboxEventRepository, UserRepository userRepository) {
+                      OutboxEventRepository outboxEventRepository, UserRepository userRepository,
+                      RabbitTemplate rabbitTemplate) {
         this.jobRepository = jobRepository;
         this.jobEventRepository = jobEventRepository;
         this.outboxEventRepository = outboxEventRepository;
         this.userRepository = userRepository;
+        this.rabbitTemplate = rabbitTemplate;
     }
 
     @Transactional
@@ -44,7 +50,7 @@ public class JobService {
                 if (!existingJob.getRequestHash().equals(requestHash)) {
                     throw new IllegalArgumentException("Idempotency key reused with different payload");
                 }
-                return existingJob; // Return existing job safely
+                return existingJob;
             }
         }
 
@@ -69,7 +75,6 @@ public class JobService {
 
         jobRepository.save(job);
 
-        // 1. Audit Event
         JobEvent event = new JobEvent();
         event.setJobId(job.getId());
         event.setEventType("JobSubmitted");
@@ -78,7 +83,6 @@ public class JobService {
         event.setActorId(principal.getUsername());
         jobEventRepository.save(event);
 
-        // 2. Outbox Event
         OutboxEvent outbox = new OutboxEvent();
         outbox.setAggregateType("JOB");
         outbox.setAggregateId(job.getId());
@@ -86,6 +90,17 @@ public class JobService {
         outbox.setPayload(Map.of("jobId", job.getId(), "jobType", job.getJobType(), "status", job.getStatus()));
         outboxEventRepository.save(outbox);
 
+        // Send to RabbitMQ ONLY AFTER the database transaction commits
+        if (job.getStatus() == JobStatus.QUEUED) {
+            TransactionSynchronizationManager.registerSynchronization(
+                    new TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            rabbitTemplate.convertAndSend(RabbitConfig.EXCHANGE_NAME, RabbitConfig.ROUTING_KEY, job.getId().toString());
+                        }
+                    }
+            );
+        }
         return job;
     }
 
