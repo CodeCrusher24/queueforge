@@ -52,8 +52,10 @@ public class JobWorker {
 
         } catch (Exception e) {
             System.err.println("❌ WORKER failed Job: " + jobId + " - " + e.getMessage());
-            // For now, just mark as FAILED. We will add retries in Phase 8.
-            stateMachine.transition(jobId, JobStatus.FAILED, "WORKER", "worker-1", e.getMessage());
+
+            // Re-fetch the job to get the latest state before handling failure
+            Job failedJob = jobRepository.findById(jobId).orElseThrow();
+            stateMachine.handleFailure(failedJob, e.getMessage());
         }
     }
 }

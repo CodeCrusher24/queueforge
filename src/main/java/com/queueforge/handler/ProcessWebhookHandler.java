@@ -19,10 +19,12 @@ public class ProcessWebhookHandler implements JobHandler {
     @Override
     public void execute(Map<String, Object> payload) throws Exception {
         System.out.println("🔗 PROCESSING WEBHOOK: " + payload.get("url"));
-        // Simulate a 50% failure rate for demonstration
-        if (Math.random() > 0.5) {
+
+        // If the payload asks to fail, simulate a temporary network error
+        if (payload.containsKey("simulateFailure") && (Boolean) payload.get("simulateFailure")) {
             throw new RuntimeException("Simulated webhook timeout");
         }
+
         System.out.println("🔗 WEBHOOK SUCCESS");
     }
 }

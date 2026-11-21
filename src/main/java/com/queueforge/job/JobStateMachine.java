@@ -76,6 +76,27 @@ public class JobStateMachine {
 
         return job;
     }
+    @Transactional
+    public void handleFailure(Job job, String errorMsg) {
+        int newAttemptCount = job.getAttemptCount() + 1;
+        job.setAttemptCount(newAttemptCount);
+
+        if (newAttemptCount < job.getMaxAttempts()) {
+            long delaySeconds = (long) Math.pow(2, newAttemptCount - 1) * 5L; // 5s, 10s, 20s...
+            job.setNextAttemptAt(Instant.now().plusSeconds(delaySeconds));
+
+            // Save the updated attempt count and nextAttemptAt to the DB FIRST
+            jobRepository.save(job);
+
+            // Then transition to RETRY_WAIT
+            transition(job.getId(), JobStatus.RETRY_WAIT, "WORKER", "worker-1", errorMsg);
+            System.out.println("⏳ Job " + job.getId() + " failed. Attempt " + newAttemptCount + "/" + job.getMaxAttempts() + ". Retrying in " + delaySeconds + " seconds.");
+        } else {
+            jobRepository.save(job);
+            transition(job.getId(), JobStatus.FAILED, "WORKER", "worker-1", errorMsg);
+            System.out.println("💀 Job " + job.getId() + " exhausted all retries. Marked FAILED.");
+        }
+    }
 
     private boolean isValidTransition(JobStatus from, JobStatus to) {
         return switch (from) {
